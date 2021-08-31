@@ -2,68 +2,91 @@ from skimage.metrics import structural_similarity
 import cv2
 import numpy as np
 
-# Reference for block colors
-# Each element is (BGR, color, shape)
-BLOCKREF = [
-        ((81, 89, 57), 'empty', 'empty'),
-        ((147, 176, 18), 'green', 'diamond'),
-        ((122, 52, 30), 'blue', 'grid'),
-        ((49, 22, 218), 'red', 'excl'),
-        ((188, 31, 253), 'pink', 'star'),
-        ((25, 154, 222), 'yellow', 'rows'),
-]
 
+# Extract game panel given a prev- and post- screenshots
+# The game panel data is from the post- screenshot
 # Reference https://stackoverflow.com/a/56193442
-def read_state(im_prev, im_post, im_draw):
-    before = cv2.imread(im_prev)
-    after = cv2.imread(im_post)
-    
+def extract_panel(im_prev, im_post):
+    im_prev = cv2.imread(im_prev)
+    im_post = cv2.imread(im_post)
+
     # convert to greyscale
-    before_grey = cv2.cvtColor(before, cv2.COLOR_BGR2GRAY)
-    after_grey = cv2.cvtColor(after, cv2.COLOR_BGR2GRAY)
-    
+    im_prev_grey = cv2.cvtColor(im_prev, cv2.COLOR_BGR2GRAY)
+    im_post_grey = cv2.cvtColor(im_post, cv2.COLOR_BGR2GRAY)
+
     # compute SSIM
-    (score, diff) = structural_similarity(before_grey, after_grey, full=True)
-    #print('image similarity:', score)
-    
-    # scale diff from [0,1] to [0,255] to enable use with opencv
+    score, diff = structural_similarity(im_prev_grey, im_post_grey, full=True)
+
+    # scale diff from [0,1] to [0,255] to enable use with OpenCV
     diff = (diff * 255).astype('uint8')
-    
-    # Threshold the difference image, followed by finding contours to
-    # obtain the regions of the two input images that differ
+
+    # threshold the diff image
     thresh = cv2.threshold(diff, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
+    # calculate diff contour regions
     contours = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
-    
-    panels = after.copy()
-    
-    # get largest diff zone to find game panel
+
+    #panels = im_post.copy()
+
+    # get the largest diff zone, thats almost certainly game panel
     area_max = 0
     x_max = 0
     y_max = 0
     w_max = 0
-    h_max = 0
     for c in contours:
         area = cv2.contourArea(c)
         if area > 40:
-            x,y,w,h = cv2.boundingRect(c)
-            cv2.rectangle(panels, (x, y), (x + w, y + h), (0,255,0), 3)
-            if (area > area_max):
+            x, y, w, h = cv2.boundingRect(c)
+            #cv2.rectangle(panels, (x, y), (x + w, y + h), (0, 255, 0), 3)
+            if area > area_max:
                 area_max = area
                 x_max = x
                 y_max = y
                 w_max = w
-                h_max = h
-            #cv2.drawContours(mask, [c], 0, (0,255,0), -1)
-            #cv2.drawContours(filled_after, [c], 0, (0,255,0), -1)
-    # draw the game panel
-    cv2.rectangle(
-            panels, 
-            (x_max, y_max), 
-            (x_max + w_max, y_max + h_max), 
-            (255, 0, 0), 
-            3
-    )
+
+    # extract the game panel and return its image data
+    h_max = int(w_max * 1.6) # the game panel ratio is pretty consistent?
+    return im_post[y_max:y_max+h_max, x_max:x_max+w_max].copy()
+
+
+def read_state(im_prev, im_post, im_draw):
+    im_game = extract_panel(im_prev, im_post)
+    im_game_grey = cv2.cvtColor(im_game, cv2.COLOR_BGR2GRAY)
+    cv2.imwrite(im_draw, im_game)
+
+    # calculate the size of block in pixels
+    block_size = im_game.shape # returns (height,width,channelcount)
+    block_size = block_size[1]/7 # there are 7 columns in a game
+
+    # Reference for block appearance
+    # Each element is (ref-filename, color, shape)
+    ref_block_types = [
+            ('ref/block_green.png', 'green', 'diamond'),
+            ('ref/block_blue.png', 'blue', 'grid'),
+            ('ref/block_red.png', 'red', 'excl'),
+            ('ref/block_pink.png', 'pink', 'star'),
+            ('ref/block_yellow.png', 'yellow', 'rows'),
+            ('ref/spike_yellow.png', 'yellow_spike', 'rows_spike')
+    ]
+
+    # Search game panel space for the most-fitting block
+    # Reference https://bits.mdminhazulhaque.io/opencv/find-image-in-another-image-using-opencv-and-numpy.html
+    for ref_block in ref_block_types:
+        im_ref = cv2.imread(ref_block[0])
+        im_ref = cv2.resize(im_ref, (int(block_size), int(block_size)))
+        im_ref_grey = cv2.cvtColor(im_ref, cv2.COLOR_BGR2GRAY)
+        ref_match = cv2.matchTemplate(
+                im_game,#[:,int(col*block_size):int((col+1)*block_size)],
+                im_ref,
+                cv2.TM_CCOEFF_NORMED
+        )
+        ref_match_threshold = np.where(ref_match >= 0.6)
+        print(ref_match_threshold[0].shape, ref_match_threshold[1].shape)
+        ref_match = (ref_match * 255).astype('uint8')
+        cv2.imwrite(f'test-{ref_block[1]}.png', ref_match)
+
+
+    """
     #print(h_max / (w_max / 7))
     # draw and identify game blocks
     for col in range(7):
@@ -115,9 +138,12 @@ def read_state(im_prev, im_post, im_draw):
                 )
             # calculate color group dists
             gdists = [[sum(abs(p - r[0])) for r in BLOCKREF] for p in palette]
-            print([(p[np.argmin(p)], BLOCKREF[np.argmin(p)][1]) for p in gdists])
             ideal = np.argmin(gdists)
-            print(BLOCKREF[ideal%len(BLOCKREF)][1])
+            print(
+                    BLOCKREF[ideal%len(BLOCKREF)][1],
+                    [(p[np.argmin(p)], BLOCKREF[np.argmin(p)][1]) for p in gdists]
+            )
 
-    cv2.imwrite(im_draw, panels)
+    cv2.imwrite(im_draw, im_game)
+    """
 

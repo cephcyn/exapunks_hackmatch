@@ -13,3 +13,4 @@ import gameparser
 
 # parse screenshot of game state
 gameparser.read_state('temp1.png', 'temp2.png', 'temp_panels.png')
+
