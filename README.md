@@ -1,5 +1,9 @@
 # exapunks_hackmatch
 
+## Use notes
+
+Make sure to turn off the "CRT mode" ingame
+
 ## Meta-notes
 
 use conda-forge higher priority than main channel

@@ -49,6 +49,11 @@ def extract_panel(im_prev, im_post):
     return im_post[y_max:y_max+h_max, x_max:x_max+w_max].copy()
 
 
+def identify_block(im, ref_block_types):
+    # TODO
+    return 'blue'
+
+
 def read_state(im_prev, im_post, im_draw):
     im_game = extract_panel(im_prev, im_post)
     im_game_grey = cv2.cvtColor(im_game, cv2.COLOR_BGR2GRAY)
@@ -56,7 +61,9 @@ def read_state(im_prev, im_post, im_draw):
 
     # calculate the size of block in pixels
     block_size = im_game.shape # returns (height,width,channelcount)
-    block_size = block_size[1]/7 # there are 7 columns in a game
+    block_size = block_size[1] # only extract width
+    block_size = block_size * (420/425) # cut off extra pixels
+    block_size = int(block_size/7) # there are 7 columns in a game
 
     # Reference for block appearance
     # Each element is (ref-filename, color, shape)
@@ -66,25 +73,46 @@ def read_state(im_prev, im_post, im_draw):
             ('ref/block_red.png', 'red', 'excl'),
             ('ref/block_pink.png', 'pink', 'star'),
             ('ref/block_yellow.png', 'yellow', 'rows'),
-            ('ref/spike_yellow.png', 'yellow_spike', 'rows_spike')
+            ('ref/spike_green.png', 'green_spike', 'diamond_spike'),
+            ('ref/spike_blue.png', 'blue_spike', 'grid_spike'),
+            ('ref/spike_red.png', 'red_spike', 'excl_spike'),
+            ('ref/spike_pink.png', 'pink_spike', 'star_spike'),
+            ('ref/spike_yellow.png', 'yellow_spike', 'rows_spike'),
     ]
 
     # Search game panel space for the most-fitting block
     # Reference https://bits.mdminhazulhaque.io/opencv/find-image-in-another-image-using-opencv-and-numpy.html
+    # Reference https://docs.opencv.org/3.4/d4/dc6/tutorial_py_template_matching.html
+    p_max_val = 0
+    p_max_loc = (0,0)
     for ref_block in ref_block_types:
         im_ref = cv2.imread(ref_block[0])
         im_ref = cv2.resize(im_ref, (int(block_size), int(block_size)))
         im_ref_grey = cv2.cvtColor(im_ref, cv2.COLOR_BGR2GRAY)
         ref_match = cv2.matchTemplate(
-                im_game,#[:,int(col*block_size):int((col+1)*block_size)],
+                im_game,
                 im_ref,
                 cv2.TM_CCOEFF_NORMED
         )
-        ref_match_threshold = np.where(ref_match >= 0.6)
-        print(ref_match_threshold[0].shape, ref_match_threshold[1].shape)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(ref_match)
+        if max_val > p_max_val:
+            p_max_val = max_val
+            p_max_loc = max_loc
         ref_match = (ref_match * 255).astype('uint8')
         cv2.imwrite(f'test-{ref_block[1]}.png', ref_match)
 
+    # Figure out the pin position of that most-fitting block
+    p_max_pos = (int(p_max_loc[0]/block_size), int(p_max_loc[1]/block_size))
+    for i_x in range(7):
+        for i_y in range(11):
+            loc_curr = (
+                    p_max_loc[0] + (i_x - p_max_pos[0])*block_size,
+                    p_max_loc[1] + (i_y - p_max_pos[1])*block_size
+            )
+            im_game_xy = im_game[loc_curr[1]:loc_curr[1]+block_size, loc_curr[0]:loc_curr[0]+block_size]
+            tag = identify_block(im_game_xy, ref_block_types)
+            print(i_x, i_y, loc_curr, tag)
+    # TODO
 
     """
     #print(h_max / (w_max / 7))
