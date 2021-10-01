@@ -7,20 +7,67 @@ KEYMAP = {
         'a_speedup': 'l', # this one should never be helpful to greedy bot...
 }
 
+# # An example of an action seq
+# ACT_SEQUENCE = [
+#         ('pos', 0), # Move to col 0
+#         ('pickup', 1, 2), # Pick up from col 1 and drop in col 2
+#         ('swap', 3), # Swap blocks in col 3
+#         ('deepswap', 4), # Deep swap (pick, swap, drop) in col 4
+# ]
+
 
 def translate_to_keys(actions):
-    keys = [KEYMAP[i] for i in actions]
-    return keys
+    # Takes in an ACT_SEQUENCE format list and convert it to actions
+    current_pos = -1
+    direct_actions = []
+    
+    # Handle auto current-position reset vs move handling
+    def move_to(col, cpos):
+        moves = []
+        if cpos==-1:
+            # If no current position guaranteed, force reset
+            moves += ['m_left']*6
+            moves += ['m_right']*col
+            cpos = col
+        else:
+            # If we know current position, move directly
+            if cpos<col:
+                # Move leftwards
+                moves += ['m_left']*(cpos-col)
+            else:
+                # Move rightwards
+                moves += ['m_right']*(col-cpos)
+            cpos = col
+        return cpos, moves
 
-
-def reset_pos():
-    # move to the center of the board
-    # there's 7 columns, and extra movement doesn't kill the bot
-    # move to far left
-    actions = ['m_left']*6
-    # move to center
-    actions += ['m_right']*3
-    return translate_to_keys(actions)
+    # Parse high-level actions into literal move commands
+    for a in actions:
+        if a[0]=='pos':
+            # Move to col [1]
+            current_pos, nmoves = move_to(a[1], current_pos)
+            direct_actions += nmoves
+        elif a[0]=='pickup':
+            # Pick up from col [1] and drop in col [2]
+            current_pos, nmoves = move_to(a[1], current_pos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            current_pos, nmoves = move_to(a[2], current_pos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+        elif a[0]=='swap':
+            # Swap blocks in col [1]
+            current_pos, nmoves = move_to(a[1], current_pos)
+            direct_actions += nmoves
+            direct_actions += ['a_swap']
+        elif a[0]=='deepswap':
+            # Deep-swap blocks in col [1]
+            current_pos, nmoves = move_to(a[1], current_pos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+    # Parse literal move commands into key inputs
+    return [KEYMAP[i] for i in direct_actions]
 
 
 def filter_state(state):
@@ -74,42 +121,70 @@ def state_matched(state):
                     clumps_loctoid[(i_c,i_r)] = ckpt_id
                     clumps_idtoloc[ckpt_id] = [(i_c,i_r)]
                     ckpt_id += 1
-    return any([len(clumps_idtoloc[i])>=4 for i in clumps_idtoloc])
+    block_possible = any([len(i)>=4 for i in clumps_idtoloc.values()])
+    spike_possible = any([len(i)>=2 for i in clumps_idtoloc.values() if len(i)>0 and state[i[0][0]][i[0][1]][0]=='s'])
+    return block_possible or spike_possible
+
+
+def state_modify(state, action):
+    # check if possible
+    if action[0]=='pickup' and len(state[action[1]])<1:
+        return False
+    if action[0]=='swap' and len(state[action[1]])<2:
+        return False
+    if action[0]=='deepswap' and len(state[action[1]])<3:
+        return False
+
+    # create modified state
+    modified_state = []
+    for i_c in range(len(state)):
+        modified_state.append([])
+        for i_r in range(len(state[i_c])):
+            modified_state[i_c].append(state[i_c][i_r])
+    # apply the move
+    if action[0]=='pickup':
+        block = state[action[1]][-1]
+        modified_state[action[1]] = modified_state[action[1]][:-1]
+        modified_state[action[2]] = modified_state[action[2]]+[block]
+    if action[0]=='swap':
+        modified_state[action[1]] = modified_state[action[1]][:-2] \
+                +[modified_state[action[1]][-1]] \
+                +[modified_state[action[1]][-2]]
+    if action[0]=='deepswap':
+        modified_state[action[1]] = modified_state[action[1]][:-3] \
+                +[modified_state[action[1]][-2]] \
+                +[modified_state[action[1]][-3]] \
+                +[modified_state[action[1]][-1]]
+    # check if exceeds height bound
+    if any([len(c)>8 for c in modified_state]):
+        return False
+    return modified_state
 
 
 def solve_state(state):
-    # Do spikes if possible
-    # Otherwise use BFS to find the easiest viable action
-    # Assumes that the controller is in the center already
+    # Use BFS to find the easiest viable action
     state = filter_state(state)
 
-    # Count top3-blocks
-    top3 = {
-            'b_blu_grid': [0]*7,
-            'b_grn_diam': [0]*7,
-            'b_pnk_star': [0]*7,
-            's_red_excl': [0]*7,
-            's_ylw_rows': [0]*7,
-            's_blu_grid': [0]*7,
-            's_grn_diam': [0]*7,
-            's_pnk_star': [0]*7,
-            's_red_excl': [0]*7,
-            's_ylw_rows': [0]*7,
-    }
-    for i_c in range(7):
-        for s in state[i_c][-3:]:
-            if s in top3:
-                top3[s][i_c] += 1
+    # set up moves to search at every step
+    MOVESET = []
+    for c_a in range(7):
+        MOVESET.append( ('swap', c_a) )
+        MOVESET.append( ('deepswap', c_a) )
+        for c_b in range(7):
+            if c_a!=c_b:
+                MOVESET.append( ('pickup', c_a, c_b) )
 
-    # If spikes are possible (at top-3 accessible), use them
-    spikes = [s for s in top3 if (sum(top3[s])>2) and (s[0]=='s')]
-    if len(spikes)>0:
-        print('spikes possible')
-        # TODO
-    else:
-        print('spikes impossible')
+    # now do the actual bfs
+    state_queue = [(a, [a], state) for a in MOVESET]
+    new_state_queue = []
+    while len(state_queue)>0:
+        for sq in state_queue:
+            state_step = state_modify(sq[2], sq[0])
+            if state_step: # will be False if impossible
+                if state_matched(state_step):
+                    print(sq[1])
+                    return translate_to_keys(sq[1])
+                else:
+                    new_state_queue += [(a, sq[1]+[a], state_step) for a in MOVESET]
+        state_queue = new_state_queue
 
-    # Otherwise, do BFS
-    # TODO
-    print(state_matched(state))
-    return []
