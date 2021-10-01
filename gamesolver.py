@@ -16,9 +16,9 @@ def translate_to_keys(actions):
 def reset_pos():
     # move to the center of the board
     # there's 7 columns, and extra movement doesn't kill the bot
-    # just move left 6 times
+    # move to far left
     actions = ['m_left']*6
-    # then move to center
+    # move to center
     actions += ['m_right']*3
     return translate_to_keys(actions)
 
@@ -35,13 +35,51 @@ def filter_state(state):
 
 
 def state_matched(state):
-    # TODO return true iff state will result in a match
+    # return true iff state will result in a match
     # Assumes input state is filtered already
-    return False
+    clumps_loctoid = {} # map {(c,r):id}
+    clumps_idtoloc = {} # map {id:[(c,r)...]}
+    ckpt_id = 0
+    for i_c in range(len(state)):
+        for i_r in range(len(state[i_c])):
+            if i_c==0 and i_r==0:
+                # if in corner, auto new clump
+                clumps_loctoid[(i_c,i_r)] = ckpt_id
+                clumps_idtoloc[ckpt_id] = [(i_c,i_r)]
+                ckpt_id += 1
+            else:
+                merged = False
+                above_id = -1
+                if i_r!=0 and state[i_c][i_r]==state[i_c][i_r-1]:
+                    # merge with above clump
+                    above_id = clumps_loctoid[(i_c,i_r-1)]
+                    clumps_loctoid[(i_c,i_r)] = above_id
+                    clumps_idtoloc[above_id].append( (i_c,i_r) )
+                    merged = True
+                if i_c!=0 and len(state[i_c-1])>i_r and state[i_c][i_r]==state[i_c-1][i_r]:
+                    # merge with leftwards clump
+                    left_id = clumps_loctoid[(i_c-1,i_r)]
+                    clumps_loctoid[(i_c,i_r)] = left_id
+                    clumps_idtoloc[left_id].append( (i_c,i_r) )
+                    if merged:
+                        # need to combine the left and above clumps
+                        # do this by setting the entire above clump to left_id
+                        for above_loc in clumps_idtoloc[above_id]:
+                            clumps_loctoid[above_loc] = left_id
+                            clumps_idtoloc[left_id].append(above_loc)
+                        clumps_idtoloc[above_id] = []
+                    merged = True
+                if not merged:
+                    # no merge possible
+                    clumps_loctoid[(i_c,i_r)] = ckpt_id
+                    clumps_idtoloc[ckpt_id] = [(i_c,i_r)]
+                    ckpt_id += 1
+    return any([len(clumps_idtoloc[i])>=4 for i in clumps_idtoloc])
 
 
 def solve_state(state):
-    # Use BFS to find the easiest viable action
+    # Do spikes if possible
+    # Otherwise use BFS to find the easiest viable action
     # Assumes that the controller is in the center already
     state = filter_state(state)
 
@@ -62,14 +100,16 @@ def solve_state(state):
         for s in state[i_c][-3:]:
             if s in top3:
                 top3[s][i_c] += 1
-    print(top3)
 
     # If spikes are possible (at top-3 accessible), use them
     spikes = [s for s in top3 if (sum(top3[s])>2) and (s[0]=='s')]
-    print(spikes)
     if len(spikes)>0:
         print('spikes possible')
         # TODO
+    else:
+        print('spikes impossible')
 
-    # Otherwise, if single-col top3 move is possible, do it
+    # Otherwise, do BFS
+    # TODO
+    print(state_matched(state))
     return []
