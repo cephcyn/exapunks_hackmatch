@@ -5,7 +5,9 @@ import gameparser
 import gamesolver
 
 # force bot to leftmost position
-# TODO
+moves = gamesolver.reset_pos()
+print(moves)
+# TODO actually do the moves
 
 # get screenshot of game state
 # ?Q: how does this interact with multi-monitor setup?
