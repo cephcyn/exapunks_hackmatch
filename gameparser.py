@@ -45,7 +45,7 @@ def extract_panel(im_prev, im_post):
                 w_max = w
 
     # extract the game panel and return its image data
-    h_max = int(w_max * 1.6) # the game panel ratio is pretty consistent?
+    h_max = int(w_max * 1.5) # the game panel ratio is pretty consistent?
     return im_post[y_max:y_max+h_max, x_max:x_max+w_max].copy()
 
 
@@ -88,16 +88,16 @@ def read_state(im_prev, im_post, im_draw):
     # Reference for block appearance
     # Each element is (ref-filename, color_shape identifier)
     ref_block_types = [
-            ('ref/b_blu_grid.png', 'b_blu_grid'),
-            ('ref/b_grn_diam.png', 'b_grn_diam'),
-            ('ref/b_pnk_star.png', 'b_pnk_star'),
-            ('ref/b_red_excl.png', 'b_red_excl'),
-            ('ref/b_ylw_rows.png', 'b_ylw_rows'),
-            ('ref/s_blu_grid.png', 's_blu_grid'),
-            ('ref/s_grn_diam.png', 's_grn_diam'),
-            ('ref/s_pnk_star.png', 's_pnk_star'),
-            ('ref/s_red_excl.png', 's_red_excl'),
-            ('ref/s_ylw_rows.png', 's_ylw_rows'),
+            ('ref/b_blu_grid.png', 'b_blu'),
+            ('ref/b_grn_diam.png', 'b_grn'),
+            ('ref/b_pnk_star.png', 'b_pnk'),
+            ('ref/b_red_excl.png', 'b_red'),
+            ('ref/b_ylw_rows.png', 'b_ylw'),
+            ('ref/s_blu_grid.png', 's_blu'),
+            ('ref/s_grn_diam.png', 's_grn'),
+            ('ref/s_pnk_star.png', 's_pnk'),
+            ('ref/s_red_excl.png', 's_red'),
+            ('ref/s_ylw_rows.png', 's_ylw'),
     ]
     # Load in the cv2 reference image parses
     ref_block_types = [
@@ -144,5 +144,27 @@ def read_state(im_prev, im_post, im_draw):
             #cv2.imwrite(f'out-{i_x}-{i_y}-{tag}.png', im_game_xy)
             #print(i_x, i_y, loc_curr, tag)
             board[i_x].append(tag)
-    return board
+    
+    # Figure out where the drone currently is
+    cpos = 3
+    cpos_score = -1
+    im_bot = cv2.imread('ref/x_bot.png')
+    im_bot = cv2.resize(im_bot, (block_size, block_size))
+    for i_x in range(board_dims[0]):
+        i_y = 9
+        loc_curr = (
+                p_max_loc[0] + (i_x - p_max_pos[0])*block_size,
+                p_max_loc[1] + (i_y - p_max_pos[1])*block_size
+        )
+        im_game_xy = im_game[loc_curr[1]:loc_curr[1]+block_size, loc_curr[0]:loc_curr[0]+block_size]
+        ref_match = cv2.matchTemplate(
+                im_game_xy,
+                im_bot,
+                cv2.TM_CCOEFF_NORMED
+        )
+        tpos_score = ref_match[0][0]
+        if tpos_score>cpos_score:
+            cpos = i_x
+            cpos_score = tpos_score
+    return board, cpos
 
