@@ -76,7 +76,7 @@ def identify_block(im, ref_block_types):
 
 def read_state(im_prev, im_post, im_draw):
     im_game = extract_panel(im_prev, im_post)
-    im_game_grey = cv2.cvtColor(im_game, cv2.COLOR_BGR2GRAY)
+    #im_game_grey = cv2.cvtColor(im_game, cv2.COLOR_BGR2GRAY)
     cv2.imwrite(im_draw, im_game)
 
     # calculate the size of block in pixels
