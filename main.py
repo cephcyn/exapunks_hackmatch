@@ -22,7 +22,7 @@ while True:
     # ?Q: how does this interact with multi-monitor setup?
     im1 = PIL.ImageGrab.grab()
     im1.save('temp1.png')
-    time.sleep(0.5)
+    time.sleep(0.2)
     im2 = PIL.ImageGrab.grab()
     im2.save('temp2.png')
 
@@ -40,7 +40,10 @@ while True:
     # actually do the moves
     for k in soln_hex:
         gameinput.PressKey(k)
-        time.sleep(0.01)
+        time.sleep(0.015)
         gameinput.ReleaseKey(k)
         time.sleep(0.05)
+
+    # wait for moves to time out
+    time.sleep(0.5)
 

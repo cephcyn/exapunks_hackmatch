@@ -90,8 +90,14 @@ def filter_state(state):
     return state_out
 
 
+def state_collapse(state, clumps_idtoloc):
+    # return collapsed form of a state
+    # TODO
+    return state
+
+
 def state_matched(state):
-    # return true iff state will result in a match
+    # return true, nextstate iff state will result in a match
     # Assumes input state is filtered already
     clumps_loctoid = {} # map {(c,r):id}
     clumps_idtoloc = {} # map {id:[(c,r)...]}
@@ -133,15 +139,16 @@ def state_matched(state):
                     clumps_idtoloc[ckpt_id] = [(i_c,i_r)]
                     ckpt_id += 1
     block_possible = any([
-        len(i)>=4 
+        len(set(i))>=4 
         for i in clumps_idtoloc.values()
     ])
     spike_possible = any([
-        len(i)>=2 
+        len(set(i))>=2 
         for i in clumps_idtoloc.values() 
         if len(i)>0 and state[i[0][0]][i[0][1]][0]=='s'
     ])
-    return block_possible or spike_possible
+    return (block_possible or spike_possible), \
+            state_collapse(state, clumps_idtoloc)
 
 
 def state_modify(state, action):
@@ -183,36 +190,68 @@ def solve_state(state):
     # Use BFS to find the easiest viable action
     state = filter_state(state)
 
+    # check if solve is even possible
+    counts = {}
+    for c in state:
+        for b in c:
+            if b not in counts:
+                counts[b] = 0
+            counts[b] += 1
+    block_solvable = any([
+        counts[t]>4 for t in counts
+    ])
+    spike_solvable = any([
+        counts[t]>2 for t in counts if t[0]=='s'
+    ])
+    if not (block_solvable or spike_solvable):
+        return [], [], state
+
     # set up moves to search at every step
     MOVESET = []
     for c_a in range(7):
         MOVESET.append( ('swap', c_a) )
         MOVESET.append( ('deepswap', c_a) )
-        for c_b in range(7):
-            if c_a!=c_b:
-                MOVESET.append( ('pickup', c_a, c_b) )
+    for c_a in range(7):
+        for d_b in range(1,7):
+            if c_a+d_b<7:
+                MOVESET.append( ('pickup', c_a, c_a+d_b) )
+            if c_a-d_b>=0:
+                MOVESET.append( ('pickup', c_a, c_a-d_b) )
 
     # now do the actual bfs
     state_queue = [(a, [a], state) for a in MOVESET]
     new_state_queue = []
-    max_steps = max([len(c) for c in state])
-    max_steps = max_steps * max_steps
+    max_steps = max([len(c) for c in state])*len(state)
     steps = 0
+    min_sq = ([], [], state)
+    min_height = 11
     while len(state_queue)>0 and steps<max_steps:
+        new_state_queue = []
         for sq in state_queue:
             state_step = state_modify(sq[2], sq[0])
             if state_step: # will be False if impossible
-                if state_matched(state_step):
+                matched, next_state = state_matched(state_step)
+                if matched:
                     print(sq[1])
                     seq = translate_to_keys(sq[1])
                     hex_seq = [HEX_KEYMAP[i] for i in seq]
-                    return seq, hex_seq, state_step
+                    return seq, hex_seq, next_state
                 else:
                     new_state_queue += [
-                            (a, sq[1]+[a], state_step) 
+                            (a, sq[1]+[a], next_state) 
                             for a in MOVESET
                     ]
-        state_queue = new_state_queue
+                state_height = max([len(c) for c in sq[2]])
+                if state_height<min_height:
+                    min_sq = sq
+                    min_height = state_height
+        state_queue = sorted(
+                new_state_queue, 
+                key=lambda x: max([len(c) for c in x[2]])
+        )
         steps += 1
-    return [], [], state
+    print(min_sq)
+    seq = translate_to_keys(min_sq[1])
+    hex_seq = [HEX_KEYMAP[i] for i in seq]
+    return seq, hex_seq, min_sq[2]
 
