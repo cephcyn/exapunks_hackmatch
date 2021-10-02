@@ -39,7 +39,7 @@ def translate_to_keys(actions):
             cpos = col
         else:
             # If we know current position, move directly
-            if cpos<col:
+            if cpos>col:
                 # Move leftwards
                 moves += ['m_left']*(cpos-col)
             else:
