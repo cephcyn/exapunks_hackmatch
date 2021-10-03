@@ -20,10 +20,15 @@ HEX_KEYMAP = {
 # # An example of an action seq
 # ACT_SEQUENCE = [
 #         ('pos', 0), # Move to c0
-#         ('pickup', 1, 2), # Pick up from c1 and drop in c2
-#         ('dpickup', 1, 2), # Deep pick up from c1, drop in c2
+#         ('0move0', 1, 2), # 0deep grab from c1, 0deep drop in c2
+#         ('1move0', 1, 2), # 1deep grab from c1, 0deep drop in c2
+#         ('2move0', 1, 2), # 2deep grab from c1, 0deep drop in c2
+#         ('1move1', 1, 2), # 1deep grab from c1, 1deep drop in c2
+#         ('1move2', 1, 2), # 1deep grab from c1, 1deep drop in c2
+#         ('2move2', 1, 2), # 2deep grab from c1, 2deep drop in c2
 #         ('swap', 3), # Swap blocks in c3
-#         ('deepswap', 4), # Deep swap (pick, swap, drop) in c4
+#         ('deepswap', 4), # Deep pull (pick, swap, drop) in c4
+#         ('deepshove', 4), # Deep push (swap, pick, swap, drop) in c4
 # ]
 
 
@@ -56,16 +61,16 @@ def translate_to_keys(actions, cpos=-1):
             # Move to col [1]
             cpos, nmoves = move_to(a[1], cpos)
             direct_actions += nmoves
-        elif a[0]=='pickup':
-            # Pick up from col [1] and drop in col [2]
+        elif a[0]=='0move0':
+            # 0deep grab from col [1], 0deep drop in col [2]
             cpos, nmoves = move_to(a[1], cpos)
             direct_actions += nmoves
             direct_actions += ['a_pickup']
             cpos, nmoves = move_to(a[2], cpos)
             direct_actions += nmoves
             direct_actions += ['a_pickup']
-        elif a[0]=='dpickup':
-            # Deep-pick up from col [1] and drop in col [2]
+        elif a[0]=='1move0':
+            # 1deep grab from col [1], 0deep drop in col [2]
             cpos, nmoves = move_to(a[1], cpos)
             direct_actions += nmoves
             direct_actions += ['a_swap']
@@ -73,15 +78,74 @@ def translate_to_keys(actions, cpos=-1):
             cpos, nmoves = move_to(a[2], cpos)
             direct_actions += nmoves
             direct_actions += ['a_pickup']
+        elif a[0]=='2move0':
+            # 2deep grab from col [1], 0deep drop in col [2]
+            cpos, nmoves = move_to(a[1], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            cpos, nmoves = move_to(a[2], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+        elif a[0]=='1move1':
+            # 1deep grab from col [1], 1deep drop in col [2]
+            cpos, nmoves = move_to(a[1], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            cpos, nmoves = move_to(a[2], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+        elif a[0]=='1move2':
+            # 1deep grab from col [1], 2deep drop in col [2]
+            cpos, nmoves = move_to(a[1], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            cpos, nmoves = move_to(a[2], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+        elif a[0]=='2move2':
+            # 2deep grab from col [1], 2deep drop in col [2]
+            cpos, nmoves = move_to(a[1], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            cpos, nmoves = move_to(a[2], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
         elif a[0]=='swap':
-            # Swap blocks in col [1]
+            #0deep swap blocks in col [1]
             cpos, nmoves = move_to(a[1], cpos)
             direct_actions += nmoves
             direct_actions += ['a_swap']
         elif a[0]=='deepswap':
-            # Deep-swap blocks in col [1]
+            # 1deep swap blocks in col [1]
             cpos, nmoves = move_to(a[1], cpos)
             direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+        elif a[0]=='deepshove':
+            # 0->2 deep push blocks in col [1]
+            cpos, nmoves = move_to(a[1], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_swap']
             direct_actions += ['a_pickup']
             direct_actions += ['a_swap']
             direct_actions += ['a_pickup']
@@ -91,20 +155,28 @@ def translate_to_keys(actions, cpos=-1):
 
 
 def move_complexity(a):
-    if a[0]=='pickup':
-        return abs(a[1]-a[2])
-    elif a[0]=='dpickup':
-        return 1+abs(a[1]-a[2])
+    if a[0]=='0move0':
+        return 3 # abs(a[1]-a[2])
+    elif a[0]=='1move0':
+        return 3 # abs(a[1]-a[2])
+    elif a[0]=='2move0':
+        return 3 # abs(a[1]-a[2])
+    elif a[0]=='1move1':
+        return 3 # abs(a[1]-a[2])
+    elif a[0]=='1move2':
+        return 3 # abs(a[1]-a[2])
+    elif a[0]=='2move2':
+        return 3 # abs(a[1]-a[2])
     elif a[0]=='swap':
         return 1
     elif a[0]=='deepswap':
-        return 2
+        return 1.1
+    elif a[0]=='deepshove':
+        return 1.1
     return 1
 
 
 def state_collapse(state, clumps_idtoloc):
-    gameviewer.print_state(state)
-    print('Attempting to collapse state now')
     new_state = [[b for b in c] for c in state]
     collapsed = False
     # return collapsed form of a state
@@ -113,7 +185,6 @@ def state_collapse(state, clumps_idtoloc):
         block_type = state[block_type[0]][block_type[1]]
         if block_type[0]=='s':
             # if this is spikes, remove the clump of spikes
-            print(f'state_collapsed: removing spikes {block_type}')
             for loc in clumps_idtoloc[id]:
                 new_state[loc[0]][loc[1]] = 'EMPTY'
             # And then remove all the relevant blocks matching color
@@ -124,7 +195,6 @@ def state_collapse(state, clumps_idtoloc):
             collapsed = True
         elif block_type[0]=='b' and len(clumps_idtoloc[id])>=4:
             # if this is blocks, remove the clump of blocks
-            print(f'state_collapsed: removing blocks {block_type}')
             for loc in clumps_idtoloc[id]:
                 new_state[loc[0]][loc[1]] = 'EMPTY'
             collapsed = True
@@ -193,19 +263,40 @@ def state_matched(state):
 
 def state_modify(state, action, cpos):
     # check if possible
-    if action[0]=='pickup' and len(state[action[1]])<1:
+    if action[0]=='0move0' and \
+            len(state[action[1]])<1:
         return False, cpos
-    if action[0]=='dpickup' and len(state[action[1]])<2:
+    if action[0]=='1move0' and \
+            len(state[action[1]])<2:
         return False, cpos
-    if action[0]=='swap' and len(state[action[1]])<2:
+    if action[0]=='2move0' and \
+            len(state[action[1]])<3:
         return False, cpos
-    if action[0]=='deepswap' and len(state[action[1]])<3:
+    if action[0]=='1move1' and \
+            (len(state[action[1]])<2 or len(state[action[2]])<1):
+        return False, cpos
+    if action[0]=='1move2' and \
+            (len(state[action[1]])<2 or len(state[action[2]])<2):
+        return False, cpos
+    if action[0]=='2move2' and \
+            (len(state[action[1]])<3 or len(state[action[2]])<2):
+        return False, cpos
+    if action[0]=='swap' and \
+            len(state[action[1]])<2:
+        return False, cpos
+    if action[0]=='deepswap' and \
+            len(state[action[1]])<3:
+        return False, cpos
+    if action[0]=='deepshove' and \
+            len(state[action[1]])<3:
         return False, cpos
 
     # check if it will result in a reasonable change
     if action[0]=='swap' and state[action[1]][-1]==state[action[1]][-2]:
         return False, cpos
     if action[0]=='deepswap' and state[action[1]][-2]==state[action[1]][-3]:
+        return False, cpos
+    if action[0]=='deepshove' and state[action[1]][-1]==state[action[1]][-3]:
         return False, cpos
 
     # create modified state
@@ -215,15 +306,45 @@ def state_modify(state, action, cpos):
         for i_r in range(len(state[i_c])):
             modified_state[i_c].append(state[i_c][i_r])
     # apply the move
-    if action[0]=='pickup':
+    if action[0]=='0move0':
         block = state[action[1]][-1]
         modified_state[action[1]] = modified_state[action[1]][:-1]
         modified_state[action[2]] = modified_state[action[2]]+[block]
-    if action[0]=='dpickup':
+    if action[0]=='1move0':
         block = state[action[1]][-2]
         modified_state[action[1]] = modified_state[action[1]][:-2] \
                 +[modified_state[action[1]][-1]]
         modified_state[action[2]] = modified_state[action[2]]+[block]
+    if action[0]=='2move0':
+        block = state[action[1]][-3]
+        modified_state[action[1]] = modified_state[action[1]][:-3] \
+                +[modified_state[action[1]][-2]] \
+                +[modified_state[action[1]][-1]]
+        modified_state[action[2]] = modified_state[action[2]]+[block]
+    if action[0]=='1move1':
+        block = state[action[1]][-2]
+        modified_state[action[1]] = modified_state[action[1]][:-2] \
+                +[modified_state[action[1]][-1]]
+        modified_state[action[2]] = modified_state[action[2]][:-1] \
+                +[block] \
+                +[modified_state[action[2]][-1]]
+    if action[0]=='1move2':
+        block = state[action[1]][-2]
+        modified_state[action[1]] = modified_state[action[1]][:-2] \
+                +[modified_state[action[1]][-1]]
+        modified_state[action[2]] = modified_state[action[2]][:-2] \
+                +[block] \
+                +[modified_state[action[2]][-2]] \
+                +[modified_state[action[2]][-1]]
+    if action[0]=='2move2':
+        block = state[action[1]][-3]
+        modified_state[action[1]] = modified_state[action[1]][:-3] \
+                +[modified_state[action[1]][-2]] \
+                +[modified_state[action[1]][-1]]
+        modified_state[action[2]] = modified_state[action[2]][:-2] \
+                +[block] \
+                +[modified_state[action[2]][-2]] \
+                +[modified_state[action[2]][-1]]
     if action[0]=='swap':
         modified_state[action[1]] = modified_state[action[1]][:-2] \
                 +[modified_state[action[1]][-1]] \
@@ -233,6 +354,11 @@ def state_modify(state, action, cpos):
                 +[modified_state[action[1]][-2]] \
                 +[modified_state[action[1]][-3]] \
                 +[modified_state[action[1]][-1]]
+    if action[0]=='deepshove':
+        modified_state[action[1]] = modified_state[action[1]][:-3] \
+                +[modified_state[action[1]][-1]] \
+                +[modified_state[action[1]][-3]] \
+                +[modified_state[action[1]][-2]]
     # check if exceeds height bound
     if any([len(c)>9 for c in modified_state]):
         return False, cpos
@@ -263,14 +389,23 @@ def solve_state(state, cpos=-1):
     for c_a in range(7):
         MOVESET.append( ('swap', c_a) )
         MOVESET.append( ('deepswap', c_a) )
+        MOVESET.append( ('deepshove', c_a) )
     for c_a in range(7):
         for d_b in range(1,7):
             if c_a+d_b<7:
-                MOVESET.append( ('dpickup', c_a, c_a+d_b) )
-                MOVESET.append( ('pickup', c_a, c_a+d_b) )
+                MOVESET.append( ('0move0', c_a, c_a+d_b) )
+                MOVESET.append( ('1move0', c_a, c_a+d_b) )
+                MOVESET.append( ('2move0', c_a, c_a+d_b) )
+                MOVESET.append( ('1move1', c_a, c_a+d_b) )
+                MOVESET.append( ('1move2', c_a, c_a+d_b) )
+                MOVESET.append( ('2move2', c_a, c_a+d_b) )
             if c_a-d_b>=0:
-                MOVESET.append( ('dpickup', c_a, c_a-d_b) )
-                MOVESET.append( ('pickup', c_a, c_a-d_b) )
+                MOVESET.append( ('0move0', c_a, c_a-d_b) )
+                MOVESET.append( ('1move0', c_a, c_a-d_b) )
+                MOVESET.append( ('2move0', c_a, c_a-d_b) )
+                MOVESET.append( ('1move1', c_a, c_a-d_b) )
+                MOVESET.append( ('1move2', c_a, c_a-d_b) )
+                MOVESET.append( ('2move2', c_a, c_a-d_b) )
 
     # now do the actual bfs
     state_queue = [(a, [a], state, a[-1]) for a in MOVESET]
@@ -281,7 +416,7 @@ def solve_state(state, cpos=-1):
     min_height = 11
     while len(state_queue)>0 and steps<max_steps:
         print(f'bfs step {steps}: begin')
-        print(f'bfs step {steps}: queue {[i[1] for i in state_queue]}')
+        print(f'bfs step {steps}: queue len={len(state_queue)}')
         state_queue = sorted(
                 state_queue,
                 key=lambda x: sum([

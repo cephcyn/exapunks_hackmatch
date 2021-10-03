@@ -9,10 +9,10 @@ import gameviewer
 cpos = 3
 im1 = PIL.ImageGrab.grab()
 im1.save('sc_0.png')
+time.sleep(0.3)
 while True:
     # get screenshot of game state
     # ?Q: how does this interact with multi-monitor setup?
-    time.sleep(0.15)
     im2 = PIL.ImageGrab.grab()
     im2.save('sc_1.png')
 
@@ -38,11 +38,8 @@ while True:
         # there is a viable solution, execute it
         for k in soln_hex:
             gameinput.PressKey(k)
-            time.sleep(0.05)
+            time.sleep(0.03)
             gameinput.ReleaseKey(k)
-            time.sleep(0.05)
+            time.sleep(0.08)
         # wait for moves to time out
         time.sleep(0.5)
-    else:
-        # there's no soluion proposed, wait a lil longer for more info
-        time.sleep(0.2)

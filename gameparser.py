@@ -54,6 +54,7 @@ def identify_block(im, ref_block_types):
     block_1 = ''
     score_2 = -1
     block_2 = ''
+    im_grey = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     for ref_block in ref_block_types:
         ref_match = cv2.matchTemplate(
                 im,
@@ -61,6 +62,13 @@ def identify_block(im, ref_block_types):
                 cv2.TM_CCOEFF_NORMED
         )
         ref_score = ref_match[0][0]
+        # ref_match_grey = cv2.matchTemplate(
+        #         im_grey,
+        #         ref_block[3],
+        #         cv2.TM_CCOEFF_NORMED
+        # )
+        # ref_score_grey = ref_match[0][0]
+        # ref_score = 0.5*(ref_score+ref_score_grey)
         if ref_score > score_1:
             score_2 = score_1
             block_2 = block_1
@@ -80,6 +88,8 @@ def filter_state(state):
     for i_c in range(len(state)):
         if 'none' in state[i_c]:
             state_out[i_c] = state[i_c][:state[i_c].index('none')]
+        elif '-----' in state[i_c]:
+            state_out[i_c] = state[i_c][:state[i_c].index('-----')]
         else:
             state_out[i_c] = state[i_c]
     return state_out
@@ -119,6 +129,10 @@ def read_state(im_prev, im_post, im_draw):
             (i[0], i[1], cv2.resize(i[2], (block_size, block_size)))
             for i in ref_block_types
     ]
+    # ref_block_types = [
+    #         (i[0], i[1], i[2], cv2.cvtColor(i[2], cv2.COLOR_BGR2GRAY))
+    #         for i in ref_block_types
+    # ]
 
     # Search game panel space for the most-fitting block
     # Reference https://bits.mdminhazulhaque.io/opencv/find-image-in-another-image-using-opencv-and-numpy.html

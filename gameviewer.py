@@ -1,3 +1,5 @@
+import gameparser
+
 def print_state(state, cpos=-1):
     # print game state
     state_cols = len(state)
@@ -38,4 +40,4 @@ def parse_state_string(input):
         if lastline[i]=='^^^^^':
             cpos = i
             break
-    return state, cpos
+    return gameparser.filter_state(state), cpos
