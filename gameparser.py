@@ -74,6 +74,17 @@ def identify_block(im, ref_block_types):
     return 'none'
 
 
+def filter_state(state):
+    # return state with ONLY filled column cells present
+    state_out = [[] for i in range(len(state))]
+    for i_c in range(len(state)):
+        if 'none' in state[i_c]:
+            state_out[i_c] = state[i_c][:state[i_c].index('none')]
+        else:
+            state_out[i_c] = state[i_c]
+    return state_out
+
+
 def read_state(im_prev, im_post, im_draw):
     im_game = extract_panel(im_prev, im_post)
     #im_game_grey = cv2.cvtColor(im_game, cv2.COLOR_BGR2GRAY)
@@ -144,7 +155,7 @@ def read_state(im_prev, im_post, im_draw):
             #cv2.imwrite(f'out-{i_x}-{i_y}-{tag}.png', im_game_xy)
             #print(i_x, i_y, loc_curr, tag)
             board[i_x].append(tag)
-    
+
     # Figure out where the drone currently is
     cpos = 3
     cpos_score = -1
@@ -166,5 +177,4 @@ def read_state(im_prev, im_post, im_draw):
         if tpos_score>cpos_score:
             cpos = i_x
             cpos_score = tpos_score
-    return board, cpos
-
+    return filter_state(board), cpos

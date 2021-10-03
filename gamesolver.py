@@ -1,3 +1,5 @@
+import gameviewer
+
 # Default key-mapping of legal actions:
 KEYMAP = {
         'm_left': 'a',
@@ -28,7 +30,7 @@ HEX_KEYMAP = {
 def translate_to_keys(actions, cpos=-1):
     # Takes in an ACT_SEQUENCE format list and convert it to actions
     direct_actions = []
-    
+
     # Handle auto current-position reset vs move handling
     def move_to(col, c_pos):
         moves = []
@@ -100,21 +102,39 @@ def move_complexity(a):
     return 1
 
 
-def filter_state(state):
-    # return state with ONLY filled column cells present
-    state_out = [[] for i in range(len(state))]
-    for i_c in range(len(state)):
-        if 'none' in state[i_c]:
-            state_out[i_c] = state[i_c][:state[i_c].index('none')]
-        else:
-            state_out[i_c] = state[i_c]
-    return state_out
-
-
 def state_collapse(state, clumps_idtoloc):
+    gameviewer.print_state(state)
+    print('Attempting to collapse state now')
+    new_state = [[b for b in c] for c in state]
+    collapsed = False
     # return collapsed form of a state
-    # TODO
-    return state
+    for id in [i for i in clumps_idtoloc if len(clumps_idtoloc[i])>=2]:
+        block_type = clumps_idtoloc[id][0]
+        block_type = state[block_type[0]][block_type[1]]
+        if block_type[0]=='s':
+            # if this is spikes, remove the clump of spikes
+            print(f'state_collapsed: removing spikes {block_type}')
+            for loc in clumps_idtoloc[id]:
+                new_state[loc[0]][loc[1]] = 'EMPTY'
+            # And then remove all the relevant blocks matching color
+            for i_c in range(len(new_state)):
+                for i_r in range(len(new_state[i_c])):
+                    if new_state[i_c][i_r]==block_type:
+                        new_state[i_c][i_r] = 'EMPTY'
+            collapsed = True
+        elif block_type[0]=='b' and len(clumps_idtoloc[id])>=4:
+            # if this is blocks, remove the clump of blocks
+            print(f'state_collapsed: removing blocks {block_type}')
+            for loc in clumps_idtoloc[id]:
+                new_state[loc[0]][loc[1]] = 'EMPTY'
+            collapsed = True
+    # Make all blocks fall back
+    for i_c in range(len(new_state)):
+        new_state[i_c] = [i for i in new_state[i_c] if i!='EMPTY']
+    # Now try to compute the new matchings, if any
+    if collapsed:
+        _, new_state = state_matched(new_state)
+    return new_state
 
 
 def state_matched(state):
@@ -146,7 +166,7 @@ def state_matched(state):
                     left_id = clumps_loctoid[(i_c-1,i_r)]
                     clumps_loctoid[(i_c,i_r)] = left_id
                     clumps_idtoloc[left_id].append( (i_c,i_r) )
-                    if merged:
+                    if merged and above_id!=left_id:
                         # need to combine the left and above clumps
                         # do this by setting the entire above clump to left_id
                         for above_loc in clumps_idtoloc[above_id]:
@@ -160,13 +180,12 @@ def state_matched(state):
                     clumps_idtoloc[ckpt_id] = [(i_c,i_r)]
                     ckpt_id += 1
     block_possible = any([
-        len(set(i))>=4 
+        len(set(i))>=4
         for i in clumps_idtoloc.values()
     ])
     spike_possible = any([
-        len(set(i))>=2 
-        for i in clumps_idtoloc.values() 
-        if len(i)>0 and state[i[0][0]][i[0][1]][0]=='s'
+        len(set(i))>=2 and state[i[0][0]][i[0][1]][0]=='s'
+        for i in clumps_idtoloc.values()
     ])
     return (block_possible or spike_possible), \
             state_collapse(state, clumps_idtoloc)
@@ -181,6 +200,12 @@ def state_modify(state, action, cpos):
     if action[0]=='swap' and len(state[action[1]])<2:
         return False, cpos
     if action[0]=='deepswap' and len(state[action[1]])<3:
+        return False, cpos
+
+    # check if it will result in a reasonable change
+    if action[0]=='swap' and state[action[1]][-1]==state[action[1]][-2]:
+        return False, cpos
+    if action[0]=='deepswap' and state[action[1]][-2]==state[action[1]][-3]:
         return False, cpos
 
     # create modified state
@@ -216,7 +241,6 @@ def state_modify(state, action, cpos):
 
 def solve_state(state, cpos=-1):
     # Use BFS to find the easiest viable action
-    state = filter_state(state)
 
     # check if solve is even possible
     counts = {}
@@ -256,6 +280,8 @@ def solve_state(state, cpos=-1):
     min_sq = ([], [], state, cpos)
     min_height = 11
     while len(state_queue)>0 and steps<max_steps:
+        print(f'bfs step {steps}: begin')
+        print(f'bfs step {steps}: queue {[i[1] for i in state_queue]}')
         state_queue = sorted(
                 state_queue,
                 key=lambda x: sum([
@@ -268,13 +294,12 @@ def solve_state(state, cpos=-1):
             if state_step: # will be False if impossible
                 matched, next_state = state_matched(state_step)
                 if matched:
-                    print('found seq:', sq[1], sq[3])
                     seq = translate_to_keys(sq[1], cpos=cpos)
                     hex_seq = [HEX_KEYMAP[i] for i in seq]
-                    return seq, hex_seq, next_state, cpos_step
+                    return sq[1], hex_seq, next_state, cpos_step
                 else:
                     new_state_queue += [
-                            (a, sq[1]+[a], next_state, cpos_step) 
+                            (a, sq[1]+[a], next_state, cpos_step)
                             for a in MOVESET
                     ]
                 state_height = max([len(c) for c in sq[2]])
@@ -283,8 +308,6 @@ def solve_state(state, cpos=-1):
                     min_height = state_height
         steps += 1
         state_queue = new_state_queue
-    print('min seq:', min_sq[1], f'{cpos}->{min_sq[3]}')
     seq = translate_to_keys(min_sq[1], cpos=cpos)
     hex_seq = [HEX_KEYMAP[i] for i in seq]
-    return seq, hex_seq, min_sq[2], min_sq[3]
-
+    return min_sq[1], hex_seq, min_sq[2], min_sq[3]
