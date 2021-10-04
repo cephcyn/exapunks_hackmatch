@@ -23,7 +23,10 @@ HEX_KEYMAP = {
 #         ('0move0', 1, 2), # 0deep grab from c1, 0deep drop in c2
 #         ('1move0', 1, 2), # 1deep grab from c1, 0deep drop in c2
 #         ('2move0', 1, 2), # 2deep grab from c1, 0deep drop in c2
+#         ('0move1', 1, 2), # 0deep grab from c1, 1deep drop in c2
 #         ('1move1', 1, 2), # 1deep grab from c1, 1deep drop in c2
+#         ('2move1', 1, 2), # 2deep grab from c1, 1deep drop in c2
+#         ('0move2', 1, 2), # 0deep grab from c1, 1deep drop in c2
 #         ('1move2', 1, 2), # 1deep grab from c1, 1deep drop in c2
 #         ('2move2', 1, 2), # 2deep grab from c1, 2deep drop in c2
 #         ('swap', 3), # Swap blocks in c3
@@ -90,6 +93,15 @@ def translate_to_keys(actions, cpos=-1):
             cpos, nmoves = move_to(a[2], cpos)
             direct_actions += nmoves
             direct_actions += ['a_pickup']
+        elif a[0]=='0move1':
+            # 0deep grab from col [1], 1deep drop in col [2]
+            cpos, nmoves = move_to(a[1], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            cpos, nmoves = move_to(a[2], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
         elif a[0]=='1move1':
             # 1deep grab from col [1], 1deep drop in col [2]
             cpos, nmoves = move_to(a[1], cpos)
@@ -100,6 +112,31 @@ def translate_to_keys(actions, cpos=-1):
             direct_actions += nmoves
             direct_actions += ['a_pickup']
             direct_actions += ['a_swap']
+        elif a[0]=='2move1':
+            # 2deep grab from col [1], 1deep drop in col [2]
+            cpos, nmoves = move_to(a[1], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            cpos, nmoves = move_to(a[2], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+        elif a[0]=='0move2':
+            # 2deep grab from col [1], 1deep drop in col [2]
+            cpos, nmoves = move_to(a[1], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            cpos, nmoves = move_to(a[2], cpos)
+            direct_actions += nmoves
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
+            direct_actions += ['a_swap']
+            direct_actions += ['a_pickup']
         elif a[0]=='1move2':
             # 1deep grab from col [1], 2deep drop in col [2]
             cpos, nmoves = move_to(a[1], cpos)
@@ -154,28 +191,6 @@ def translate_to_keys(actions, cpos=-1):
     return keys
 
 
-def move_complexity(a):
-    if a[0]=='0move0':
-        return 3 # abs(a[1]-a[2])
-    elif a[0]=='1move0':
-        return 3 # abs(a[1]-a[2])
-    elif a[0]=='2move0':
-        return 3 # abs(a[1]-a[2])
-    elif a[0]=='1move1':
-        return 3 # abs(a[1]-a[2])
-    elif a[0]=='1move2':
-        return 3 # abs(a[1]-a[2])
-    elif a[0]=='2move2':
-        return 3 # abs(a[1]-a[2])
-    elif a[0]=='swap':
-        return 1
-    elif a[0]=='deepswap':
-        return 1.1
-    elif a[0]=='deepshove':
-        return 1.1
-    return 1
-
-
 def state_collapse(state, clumps_idtoloc):
     new_state = [[b for b in c] for c in state]
     collapsed = False
@@ -202,9 +217,10 @@ def state_collapse(state, clumps_idtoloc):
     for i_c in range(len(new_state)):
         new_state[i_c] = [i for i in new_state[i_c] if i!='EMPTY']
     # Now try to compute the new matchings, if any
+    collapsed_clumps = clumps_idtoloc
     if collapsed:
-        _, new_state = state_matched(new_state)
-    return new_state
+        _, new_state, collapsed_clumps = state_matched(new_state)
+    return new_state, collapsed_clumps
 
 
 def state_matched(state):
@@ -257,8 +273,14 @@ def state_matched(state):
         len(set(i))>=2 and state[i[0][0]][i[0][1]][0]=='s'
         for i in clumps_idtoloc.values()
     ])
-    return (block_possible or spike_possible), \
-            state_collapse(state, clumps_idtoloc)
+    collapse_needed = block_possible or spike_possible
+    collapsed_state = state
+    collapsed_clumps = clumps_idtoloc
+    if collapse_needed:
+        collapsed_state, collapsed_clumps = state_collapse(state, clumps_idtoloc)
+    return collapse_needed, \
+            collapsed_state, \
+            collapsed_clumps
 
 
 def state_modify(state, action, cpos):
@@ -272,8 +294,17 @@ def state_modify(state, action, cpos):
     if action[0]=='2move0' and \
             len(state[action[1]])<3:
         return False, cpos
+    if action[0]=='0move1' and \
+            (len(state[action[1]])<1 or len(state[action[2]])<1):
+        return False, cpos
     if action[0]=='1move1' and \
             (len(state[action[1]])<2 or len(state[action[2]])<1):
+        return False, cpos
+    if action[0]=='2move1' and \
+            (len(state[action[1]])<3 or len(state[action[2]])<1):
+        return False, cpos
+    if action[0]=='0move2' and \
+            (len(state[action[1]])<1 or len(state[action[2]])<2):
         return False, cpos
     if action[0]=='1move2' and \
             (len(state[action[1]])<2 or len(state[action[2]])<2):
@@ -321,12 +352,33 @@ def state_modify(state, action, cpos):
                 +[modified_state[action[1]][-2]] \
                 +[modified_state[action[1]][-1]]
         modified_state[action[2]] = modified_state[action[2]]+[block]
+    if action[0]=='0move1':
+        block = state[action[1]][-1]
+        modified_state[action[1]] = modified_state[action[1]][:-1]
+        modified_state[action[2]] = modified_state[action[2]][:-1] \
+                +[block] \
+                +[modified_state[action[2]][-1]]
     if action[0]=='1move1':
         block = state[action[1]][-2]
         modified_state[action[1]] = modified_state[action[1]][:-2] \
                 +[modified_state[action[1]][-1]]
         modified_state[action[2]] = modified_state[action[2]][:-1] \
                 +[block] \
+                +[modified_state[action[2]][-1]]
+    if action[0]=='2move1':
+        block = state[action[1]][-3]
+        modified_state[action[1]] = modified_state[action[1]][:-3] \
+                +[modified_state[action[1]][-2]] \
+                +[modified_state[action[1]][-1]]
+        modified_state[action[2]] = modified_state[action[2]][:-1] \
+                +[block] \
+                +[modified_state[action[2]][-1]]
+    if action[0]=='0move2':
+        block = state[action[1]][-1]
+        modified_state[action[1]] = modified_state[action[1]][:-1]
+        modified_state[action[2]] = modified_state[action[2]][:-2] \
+                +[block] \
+                +[modified_state[action[2]][-2]] \
                 +[modified_state[action[2]][-1]]
     if action[0]=='1move2':
         block = state[action[1]][-2]
@@ -360,29 +412,70 @@ def state_modify(state, action, cpos):
                 +[modified_state[action[1]][-3]] \
                 +[modified_state[action[1]][-2]]
     # check if exceeds height bound
-    if any([len(c)>9 for c in modified_state]):
+    if any([len(c)>11 for c in modified_state]):
         return False, cpos
     return modified_state, action[-1]
 
 
-def solve_state(state, cpos=-1):
-    # Use BFS to find the easiest viable action
+def heuristic_state(state, actions, state_group):
+    def move_complexity(a):
+        if a[0]=='0move0':
+            return (2/6)*abs(a[1]-a[2])
+        elif a[0]=='1move0':
+            return (2/6)*abs(a[1]-a[2])
+        elif a[0]=='2move0':
+            return (2/6)*abs(a[1]-a[2])
+        elif a[0]=='0move1':
+            return (2/6)*abs(a[1]-a[2])
+        elif a[0]=='1move1':
+            return (2/6)*abs(a[1]-a[2])
+        elif a[0]=='2move1':
+            return (3/6)*abs(a[1]-a[2])
+        elif a[0]=='0move2':
+            return (2/6)*abs(a[1]-a[2])
+        elif a[0]=='1move2':
+            return (3/6)*abs(a[1]-a[2])
+        elif a[0]=='2move2':
+            return (3/6)*abs(a[1]-a[2])
+        elif a[0]=='swap':
+            return 1
+        elif a[0]=='deepswap':
+            return 1.1
+        elif a[0]=='deepshove':
+            return 1.1
+        return 1
 
-    # check if solve is even possible
-    counts = {}
-    for c in state:
-        for b in c:
-            if b not in counts:
-                counts[b] = 0
-            counts[b] += 1
-    block_solvable = any([
-        counts[t]>4 for t in counts
+    action_heuristic = sum([
+        move_complexity(c) for c in actions
     ])
-    spike_solvable = any([
-        counts[t]>2 for t in counts if t[0]=='s'
-    ])
-    if not (block_solvable or spike_solvable):
-        return [], [], state, cpos
+    height_avg = sum([len(c) for c in state])/len(state)
+    height_heuristic = [
+        (len(c)+1)**3 for c in state
+    ]
+    height_heuristic = (1/height_avg**3)*sum(height_heuristic)
+    group_heuristic = [
+        (1/len(g))**2 for g in state_group.values() if len(g)>0
+    ]
+    group_heuristic = sum(group_heuristic)
+    print(action_heuristic, height_heuristic, group_heuristic)
+    return action_heuristic + height_heuristic + group_heuristic
+
+def solve_state(state, cpos=-1):
+    # # check if solve is even possible
+    # counts = {}
+    # for c in state:
+    #     for b in c:
+    #         if b not in counts:
+    #             counts[b] = 0
+    #         counts[b] += 1
+    # block_solvable = any([
+    #     counts[t]>4 for t in counts
+    # ])
+    # spike_solvable = any([
+    #     counts[t]>2 for t in counts if t[0]=='s'
+    # ])
+    # if not (block_solvable or spike_solvable):
+    #     return [], [], state, cpos
 
     # set up moves to search at every step
     MOVESET = []
@@ -390,59 +483,70 @@ def solve_state(state, cpos=-1):
         MOVESET.append( ('swap', c_a) )
         MOVESET.append( ('deepswap', c_a) )
         MOVESET.append( ('deepshove', c_a) )
-    for c_a in range(7):
-        for d_b in range(1,7):
-            if c_a+d_b<7:
-                MOVESET.append( ('0move0', c_a, c_a+d_b) )
-                MOVESET.append( ('1move0', c_a, c_a+d_b) )
-                MOVESET.append( ('2move0', c_a, c_a+d_b) )
-                MOVESET.append( ('1move1', c_a, c_a+d_b) )
-                MOVESET.append( ('1move2', c_a, c_a+d_b) )
-                MOVESET.append( ('2move2', c_a, c_a+d_b) )
-            if c_a-d_b>=0:
-                MOVESET.append( ('0move0', c_a, c_a-d_b) )
-                MOVESET.append( ('1move0', c_a, c_a-d_b) )
-                MOVESET.append( ('2move0', c_a, c_a-d_b) )
-                MOVESET.append( ('1move1', c_a, c_a-d_b) )
-                MOVESET.append( ('1move2', c_a, c_a-d_b) )
-                MOVESET.append( ('2move2', c_a, c_a-d_b) )
+        for c_b in range(1,7):
+            if c_a!=c_b:
+                MOVESET.append( ('0move0', c_a, c_b) )
+                MOVESET.append( ('1move0', c_a, c_b) )
+                MOVESET.append( ('2move0', c_a, c_b) )
+                MOVESET.append( ('0move1', c_a, c_b) )
+                MOVESET.append( ('1move1', c_a, c_b) )
+                MOVESET.append( ('2move1', c_a, c_b) )
+                MOVESET.append( ('0move2', c_a, c_b) )
+                MOVESET.append( ('1move2', c_a, c_b) )
+                MOVESET.append( ('2move2', c_a, c_b) )
 
-    # now do the actual bfs
-    state_queue = [(a, [a], state, a[-1]) for a in MOVESET]
-    new_state_queue = []
-    max_steps = max([len(c) for c in state])*15
+    # initialize state_queue
+    state_queue = []
+    for a in MOVESET:
+        state_step, cpos_step = state_modify(state, a, cpos=cpos)
+        if state_step:
+            matched, next_state, state_group = state_matched(state_step)
+            state_queue.append((
+                [a],
+                next_state,
+                cpos_step,
+                state_group,
+                matched!=False
+            ))
+    # begin the actual search
+    max_steps = max([len(c) for c in state])*len(MOVESET)*0.5
     steps = 0
-    min_sq = ([], [], state, cpos)
-    min_height = 11
     while len(state_queue)>0 and steps<max_steps:
-        print(f'bfs step {steps}: begin')
-        print(f'bfs step {steps}: queue len={len(state_queue)}')
-        state_queue = sorted(
-                state_queue,
-                key=lambda x: sum([
-                    move_complexity(c) for c in x[1]
-                ])
-        )
-        new_state_queue = []
-        for sq in state_queue:
-            state_step, cpos_step = state_modify(sq[2], sq[0], cpos=cpos)
-            if state_step: # will be False if impossible
-                matched, next_state = state_matched(state_step)
-                if matched:
-                    seq = translate_to_keys(sq[1], cpos=cpos)
-                    hex_seq = [HEX_KEYMAP[i] for i in seq]
-                    return sq[1], hex_seq, next_state, cpos_step
-                else:
-                    new_state_queue += [
-                            (a, sq[1]+[a], next_state, cpos_step)
-                            for a in MOVESET
-                    ]
-                state_height = max([len(c) for c in sq[2]])
-                if state_height<min_height:
-                    min_sq = sq
-                    min_height = state_height
+        if steps%len(MOVESET)==0:
+            print(f'queue step {steps}: resorting')
+            state_queue = sorted(
+                    state_queue,
+                    key=lambda x: heuristic_state(x[1], x[0], x[3])
+            )
+        sq = state_queue[0]
+        state_queue = state_queue[1:]
         steps += 1
-        state_queue = new_state_queue
-    seq = translate_to_keys(min_sq[1], cpos=cpos)
-    hex_seq = [HEX_KEYMAP[i] for i in seq]
-    return min_sq[1], hex_seq, min_sq[2], min_sq[3]
+        # try out the next ideal step
+        if sq[4]:
+            seq = translate_to_keys(sq[0], cpos=cpos)
+            hex_seq = [HEX_KEYMAP[i] for i in seq]
+            return sq[0], hex_seq, sq[1], sq[2]
+        else:
+            for a in MOVESET:
+                state_step, cpos_step = state_modify(next_state, a, cpos=sq[2])
+                if state_step:
+                    matched, next_state, state_group = state_matched(state_step)
+                    state_queue.append((
+                        sq[0]+[a],
+                        next_state,
+                        cpos_step,
+                        state_group,
+                        matched!=False
+                    ))
+    print(f'no match found under limit {max_steps}')
+    state_queue = sorted(
+            state_queue,
+            key=lambda x: heuristic_state(x[1], x[0], x[3])
+    )
+    if len(state_queue)>0:
+        sq = state_queue[0]
+        seq = translate_to_keys(sq[0], cpos=cpos)
+        hex_seq = [HEX_KEYMAP[i] for i in seq]
+        return sq[0], hex_seq, sq[1], sq[2]
+    else:
+        return [], [], state, cpos

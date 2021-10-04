@@ -24,9 +24,9 @@ def parse_state_string(input):
     # parse a game state string output into state form
     state = []
     cpos = -1
-    lines = input.split('\n')
+    lines = [l.strip() for l in input.split('\n') if len(l.strip())>0]
     # read in the input string block contents
-    for line in [l for l in lines[:-1] if len(l)>0]:
+    for line in lines[:-1]:
         blocks = line.strip().split(' ')
         state_cols = len(blocks)
         if len(state)==0:
